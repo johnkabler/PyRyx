@@ -10,74 +10,76 @@ else:
     from io import StringIO
 import time
 
-def generateAyxEndpoint(gallery_url, operation, method):
-    req_url = gallery_url + '{operation}/{method}/'.format(operation=operation,
-                                                         method=method)
-    return req_url
+class PyRyxApi:
 
-def generateAyxRequest(endpoint, client_key, client_secret):
-    queryoauth = OAuth1(client_key, client_secret, signature_type='query')
-    return requests.get(endpoint, auth=queryoauth)
-
-def getSubscriptionWorkflows(client_key, client_secret,
-                             gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'workflows', 'subscription')
-    return generateAyxRequest(endpoint, client_key, client_secret).json()
-
-def getWorkflowQuestions(client_key, client_secret, app_id,
-                         gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'workflows', app_id) + 'questions/'
-    return generateAyxRequest(endpoint, client_key, client_secret).json()
-
-def getWorkflowJobs(client_key, client_secret, app_id,
-                         gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'workflows', app_id) + 'jobs/'
-    return generateAyxRequest(endpoint, client_key, client_secret).json()
+    def __init__(self, client_key, client_secret, gallery_url):
+        self.client_key = client_key
+        self.client_secret = client_secret
+        self.gallery_url = gallery_url
 
 
-def checkJobState(client_key, client_secret, job_id,
-                         gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'jobs', job_id)
-    return generateAyxRequest(endpoint, client_key, client_secret).json()
+    def generateAyxEndpoint(self, operation, method):
+        req_url = self.gallery_url + '{operation}/{method}/'.format(operation=operation,
+                                                             method=method)
+        return req_url
+
+    def generateAyxRequest(self, endpoint):
+        queryoauth = OAuth1(self.client_key, self.client_secret, signature_type='query')
+        return requests.get(endpoint, auth=queryoauth)
+
+    def getSubscriptionWorkflows(self):
+        endpoint = self.generateAyxEndpoint('workflows', 'subscription')
+        return self.generateAyxRequest(endpoint).json()
+
+    def getWorkflowQuestions(self, app_id):
+        endpoint = self.generateAyxEndpoint('workflows', app_id) + 'questions/'
+        return self.generateAyxRequest(endpoint).json()
+
+    def getWorkflowJobs(self, app_id):
+        endpoint = self.generateAyxEndpoint('workflows', app_id) + 'jobs/'
+        return self.generateAyxRequest(endpoint).json()
 
 
-def getJobOutput(client_key, client_secret, job_id, output_id,
-                gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'jobs', job_id)
-    endpoint = endpoint + 'output/{output_id}/'.format(output_id=output_id)
-    queryoauth = OAuth1(client_key, client_secret, signature_type='query')
-    payload = {'format': 'Csv'}
-    DATA = StringIO(requests.get(endpoint, auth=queryoauth, params=payload).text)
-    return pd.read_csv(DATA)
-
-def fetchJobOutput(client_key, client_secret, job_id, gallery_url='http://localhost:80/gallery/api/v1/'):
-    job_info = checkJobState(client_key, client_secret, job_id, gallery_url)
-    result_list = []
-    output_id_list = [output['id'] for output in job_info['outputs'][:-1]]
-    for output_id in output_id_list:
-        output_df = getJobOutput(client_key, client_secret, job_id, output_id, gallery_url)
-        result_list.append(output_df)
-    df = pd.concat(result_list)
-    return df[:-1]
+    def checkJobState(self, job_id):
+        endpoint = self.generateAyxEndpoint('jobs', job_id)
+        return self.generateAyxRequest(endpoint).json()
 
 
-def executeWorkflow(client_key, client_secret, app_id, question_payload,
-                    gallery_url='http://localhost:80/gallery/api/v1/'):
-    endpoint = generateAyxEndpoint(gallery_url, 'workflows', app_id) + 'jobs/'
-    queryoauth = OAuth1(client_key, client_secret, signature_type='query')
-    return requests.post(endpoint, auth=queryoauth, json=question_payload)
+    def getJobOutput(self, job_id, output_id):
+        endpoint = self.generateAyxEndpoint('jobs', job_id)
+        endpoint = endpoint + 'output/{output_id}/'.format(output_id=output_id)
+        queryoauth = OAuth1(self.client_key, self.client_secret, signature_type='query')
+        payload = {'format': 'Csv'}
+        DATA = StringIO(requests.get(endpoint, auth=queryoauth, params=payload).text)
+        return pd.read_csv(DATA)
+
+    def fetchJobOutput(self, job_id):
+        job_info = self.checkJobState(job_id)
+        result_list = []
+        output_id_list = [output['id'] for output in job_info['outputs'][:-1]]
+        for output_id in output_id_list:
+            output_df = self.getJobOutput(job_id, output_id)
+            result_list.append(output_df)
+        df = pd.concat(result_list)
+        return df[:-1]
 
 
-def executeAndFetchResults(client_key, client_secret, app_id,
-                           question_payload, gallery_url='http://localhost:80/gallery/api/v1/'):
-    response = executeWorkflow(client_key, client_secret, app_id, question_payload, gallery_url)
-    job_id = response.json()['id']
-    job_state = 'Queued'
-    while(job_state == 'Queued'):
-        job = checkJobState(client_key, client_secret, job_id)
-        j_state = job['status']
-        print(j_state)
-        if (j_state == 'Completed'):
-            job_state = j_state
-        time.sleep(1)
-    return fetchJobOutput(client_key, client_secret, job_id, gallery_url)
+    def executeWorkflow(self, app_id, question_payload):
+        endpoint = self.generateAyxEndpoint('workflows', app_id) + 'jobs/'
+        queryoauth = OAuth1(self.client_key, self.client_secret, signature_type='query')
+        return requests.post(endpoint, auth=queryoauth, json=question_payload)
+
+
+    def executeAndFetchResults(self, app_id,
+                               question_payload):
+        response = self.executeWorkflow(app_id, question_payload)
+        job_id = response.json()['id']
+        job_state = 'Queued'
+        while(job_state == 'Queued'):
+            job = self.checkJobState(job_id)
+            j_state = job['status']
+            print(j_state)
+            if (j_state == 'Completed'):
+                job_state = j_state
+            time.sleep(1)
+        return self.fetchJobOutput(job_id)
