@@ -56,11 +56,14 @@ class PyRyxApi:
     def fetchJobOutput(self, job_id):
         job_info = self.checkJobState(job_id)
         result_list = []
-        output_id_list = [output['id'] for output in job_info['outputs'][:-1]]
+        output_id_list = [output['id'] for output in job_info['outputs']]
         for output_id in output_id_list:
             output_df = self.getJobOutput(job_id, output_id)
             result_list.append(output_df)
-        df = pd.concat(result_list)
+        if (len(result_list) > 1):
+            df = pd.concat(result_list)
+        else:
+            df = result_list[0]
         return df[:-1]
 
 
