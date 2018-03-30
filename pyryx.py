@@ -63,7 +63,7 @@ class PyRyxApi:
         if (len(result_list) > 1):
             df = pd.concat(result_list)
         else:
-            df = result_list[0]
+            df = result_list[:1]
         return df[:-1]
 
 
